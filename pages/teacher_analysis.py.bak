@@ -1,0 +1,639 @@
+import streamlit as st
+
+# Minimal stub to avoid parsing errors while the full feature is restored.
+st.set_page_config(page_title="Teacher Analysis", layout="wide")
+
+st.title("Teacher Analysis")
+st.info("Teacher Analysis temporarily disabled due to prior file errors. Contact the administrator to restore the full feature.")
+import streamlit as st
+
+# Minimal stub to avoid parsing errors while the full feature is restored.
+st.set_page_config(page_title="Teacher Analysis", layout="wide")
+
+st.title("Teacher Analysis")
+st.info("Teacher Analysis temporarily disabled due to prior file errors. Contact the administrator to restore the full feature.")
+import streamlit as st
+
+st.set_page_config(page_title="Teacher Analysis", layout="wide")
+
+st.title("Teacher Analysis")
+st.info("Temporary stub: the full Teacher Analysis page was causing indentation errors and has been replaced with this working stub. I can restore the full feature next.")
+
+import streamlit as st
+import os
+import json
+from modules.storage import get_storage_dir
+import pandas as pd
+
+st.set_page_config(page_title="Teacher Analysis", layout="wide")
+
+st.markdown("## Teacher Analysis — Assign, Rank & Export")
+ROOT = os.path.join(get_storage_dir())
+METADATA = os.path.join(ROOT, 'exams_metadata.json')
+TA_TEACHERS_FILE = os.path.join(ROOT, 'ta_teachers.json')
+TA_ASSIGNMENTS_FILE = os.path.join(ROOT, 'ta_assignments.json')
+
+
+def load_json(path, default):
+    try:
+        if os.path.exists(path):
+            with open(path, 'r', encoding='utf-8') as fh:
+                return json.load(fh)
+    except Exception:
+        pass
+    return default
+
+
+def save_json(path, data):
+    try:
+        with open(path, 'w', encoding='utf-8') as fh:
+            json.dump(data, fh, indent=2, ensure_ascii=False)
+        return True
+    except Exception:
+        return False
+
+
+def load_meta():
+    return load_json(METADATA, {})
+
+
+def get_meta_choices(meta):
+    years, terms, kinds = set(), set(), set()
+    for v in (meta.values() if isinstance(meta, dict) else []):
+        if v.get('year') is not None:
+            years.add(str(v.get('year')))
+        if v.get('term') is not None:
+            terms.add(str(v.get('term')))
+        kind = v.get('exam_kind') or v.get('kind') or v.get('type')
+        if kind:
+            kinds.add(str(kind))
+    return sorted(years), sorted(terms), sorted(kinds)
+
+
+def discover_subjects_and_classes(exam_ids):
+    subjects = set()
+    classes = set()
+    for eid in exam_ids:
+        try:
+            dpath = os.path.join(ROOT, eid, 'data.pkl')
+            if not os.path.exists(dpath):
+                continue
+            df = pd.read_pickle(dpath)
+            exclude = {'Name', 'Adm No', 'Class', 'Total', 'Mean', 'Rank', 'S/Rank', 'Points', 'Mean Grade'}
+            for c in df.columns:
+                if c not in exclude:
+                    subjects.add(str(c))
+            if 'Class' in df.columns:
+                classes.update(df['Class'].dropna().astype(str).unique())
+        except Exception:
+            continue
+    return sorted(subjects), sorted(classes)
+
+
+# persistent
+teachers = load_json(TA_TEACHERS_FILE, [])
+assignments = load_json(TA_ASSIGNMENTS_FILE, {})
+meta = load_meta()
+
+st.caption(f"Saved exams metadata entries: {len(meta) if isinstance(meta, dict) else 0}")
+
+# Tabs UI
+tabs = st.tabs(['Manage Teachers', 'Assign Subjects', 'Compute & Rank', 'Export'])
+
+with tabs[0]:
+    st.markdown('### Manage teachers')
+    c1, c2 = st.columns([3, 1])
+    with c1:
+        new_name = st.text_input('New teacher full name', key='ta_new_teacher')
+        if st.button('Add teacher', key='ta_add_btn'):
+            if not new_name.strip():
+                st.warning('Enter a name')
+            elif any(t.get('name') == new_name.strip() for t in teachers):
+                st.warning('Teacher exists')
+            else:
+                teachers.append({'name': new_name.strip(), 'category': 'unknown'})
+                save_json(TA_TEACHERS_FILE, teachers)
+                st.success('Added')
+                st.experimental_rerun()
+    with c2:
+        if teachers:
+            rem = st.selectbox('Remove teacher', options=[''] + [t['name'] for t in teachers], key='ta_remove')
+            if rem and st.button('Remove', key='ta_remove_btn'):
+                teachers = [t for t in teachers if t['name'] != rem]
+                assignments.pop(rem, None)
+                save_json(TA_TEACHERS_FILE, teachers)
+                save_json(TA_ASSIGNMENTS_FILE, assignments)
+                st.success('Removed')
+                st.experimental_rerun()
+
+    if teachers:
+        st.dataframe(pd.DataFrame(teachers))
+    else:
+        st.info('No teachers defined')
+
+with tabs[1]:
+    st.markdown('### Assign subjects to teachers (by class/stream)')
+    if not meta:
+        st.info('No exams metadata found. Save exams first.')
+    else:
+        years, terms, kinds = get_meta_choices(meta)
+        ycol, tcol, kcol = st.columns(3)
+        with ycol:
+            sel_year = st.selectbox('Year', options=['All'] + years, index=0, key='ta_year')
+        with tcol:
+            sel_term = st.selectbox('Term', options=['All'] + terms, index=0, key='ta_term')
+        with kcol:
+            sel_kinds = st.multiselect('Exam kind (multi-select)', options=kinds, default=kinds, key='ta_kinds')
+
+        # filter exams
+        filtered = []
+        for eid, info in meta.items():
+            if sel_year != 'All' and str(info.get('year')) != str(sel_year):
+                continue
+            if sel_term != 'All' and str(info.get('term')) != str(sel_term):
+                continue
+            kind_val = str(info.get('exam_kind') or info.get('kind') or info.get('type') or '')
+            if sel_kinds and kind_val not in sel_kinds:
+                continue
+            filtered.append(eid)
+
+        st.markdown(f'Found {len(filtered)} exams matching filters')
+        subjects, classes = discover_subjects_and_classes(filtered)
+        if not subjects:
+            st.info('No subject columns discovered in the filtered exams')
+        else:
+            left, right = st.columns([2, 3])
+            with left:
+                cls = st.selectbox('Class / Stream', options=['All Classes'] + classes, index=0, key='ta_class')
+                tnames = [t['name'] for t in teachers] if teachers else []
+                sel_teacher = st.selectbox('Teacher', options=[''] + tnames, key='ta_teacher')
+            with right:
+                sel_subjects = st.multiselect('Subjects to assign', options=subjects, key='ta_subjects')
+
+            if st.button('Assign', key='ta_assign_btn'):
+                if not sel_teacher:
+                    st.warning('Select a teacher')
+                elif not sel_subjects:
+                    st.warning('Select subjects')
+                else:
+                    assignments.setdefault(sel_teacher, [])
+                    assignments[sel_teacher].append({'class': cls if cls != 'All Classes' else '', 'subjects': sel_subjects})
+                    save_json(TA_ASSIGNMENTS_FILE, assignments)
+                    st.success('Assigned')
+                    st.experimental_rerun()
+
+        if assignments:
+            rows = []
+            for tname, alist in assignments.items():
+                for a in alist:
+                    rows.append({'teacher': tname, 'class': a.get('class', ''), 'subjects': ', '.join(a.get('subjects', []))})
+            st.dataframe(pd.DataFrame(rows))
+
+with tabs[2]:
+    st.markdown('### Compute teacher rankings')
+    if not teachers:
+        st.info('Define teachers first')
+    elif not assignments:
+        st.info('Create assignments first')
+    elif not meta:
+        st.info('No exams metadata found')
+    else:
+        years, terms, kinds = get_meta_choices(meta)
+        ycol, tcol, kcol = st.columns(3)
+        with ycol:
+            sel_year = st.selectbox('Year (compute)', options=['All'] + years, index=0, key='ta_r_year')
+        with tcol:
+            sel_term = st.selectbox('Term (compute)', options=['All'] + terms, index=0, key='ta_r_term')
+        with kcol:
+            sel_kinds = st.multiselect('Exam kind (compute - multi)', options=kinds, default=kinds, key='ta_r_kinds')
+
+        filtered = []
+        for eid, info in meta.items():
+            if sel_year != 'All' and str(info.get('year')) != str(sel_year):
+                continue
+            if sel_term != 'All' and str(info.get('term')) != str(sel_term):
+                continue
+            kind_val = str(info.get('exam_kind') or info.get('kind') or info.get('type') or '')
+            if sel_kinds and kind_val not in sel_kinds:
+                continue
+            filtered.append(eid)
+
+        if not filtered:
+            st.info('No exams selected for ranking')
+        else:
+            if st.button('Compute rankings now', key='ta_compute_btn'):
+                ranking = []
+                for t in teachers:
+                    tname = t.get('name')
+                    assigned = assignments.get(tname, [])
+                    subj_means = []
+                    for a in assigned:
+                        a_class = a.get('class')
+                        for subj in a.get('subjects', []):
+                            all_vals = []
+                            for eid in filtered:
+                                try:
+                                    dpath = os.path.join(ROOT, eid, 'data.pkl')
+                                    if not os.path.exists(dpath):
+                                        continue
+                                    df = pd.read_pickle(dpath)
+                                    dff = df
+                                    if a_class and 'Class' in df.columns:
+                                        dff = df[df['Class'].astype(str) == str(a_class)]
+                                    if subj in dff.columns:
+                                        vals = pd.to_numeric(dff[subj], errors='coerce').dropna()
+                                        if not vals.empty:
+                                            all_vals.append(vals.mean())
+                                except Exception:
+                                    continue
+                            if all_vals:
+                                subj_means.append(float(pd.Series(all_vals).mean()))
+                    score = float(pd.Series(subj_means).mean()) if subj_means else 0.0
+                    ranking.append({'teacher': tname, 'score': score, 'category': t.get('category', 'unknown')})
+
+                rdf = pd.DataFrame(sorted(ranking, key=lambda x: x['score'], reverse=True))
+                if not rdf.empty:
+                    rdf.insert(0, 'rank', range(1, len(rdf) + 1))
+                st.markdown('#### Ranking')
+                st.dataframe(rdf)
+
+                st.markdown('#### Categorize teachers')
+                for i, row in rdf.iterrows():
+                    c1, c2 = st.columns([3, 1])
+                    with c1:
+                        st.write(f"{int(row['rank'])}. {row['teacher']} — {row['score']:.2f}")
+                    with c2:
+                        cur_idx = 0
+                        try:
+                            cur_idx = ['unknown', 'upper', 'lower'].index(row.get('category', 'unknown'))
+                        except Exception:
+                            cur_idx = 0
+                        newcat = st.selectbox(f"cat_{i}", options=['unknown', 'upper', 'lower'], index=cur_idx, key=f'ta_cat_{i}')
+                        if st.button(f'Set {row["teacher"]}', key=f'ta_setcat_{i}'):
+                            for t in teachers:
+                                if t.get('name') == row['teacher']:
+                                    t['category'] = newcat
+                                    break
+                            save_json(TA_TEACHERS_FILE, teachers)
+                            st.success('Saved')
+                            st.experimental_rerun()
+
+with tabs[3]:
+    st.markdown('### Export & maintenance')
+    tdf = pd.DataFrame(teachers) if teachers else pd.DataFrame()
+    adf = []
+    for tname, alist in assignments.items():
+        for a in alist:
+            adf.append({'teacher': tname, 'class': a.get('class', ''), 'subjects': ';'.join(a.get('subjects', []))})
+    adf = pd.DataFrame(adf)
+
+    st.markdown('Teachers')
+    st.dataframe(tdf)
+    if not tdf.empty:
+        st.download_button('Download teachers CSV', data=tdf.to_csv(index=False), file_name='ta_teachers.csv', mime='text/csv')
+
+    st.markdown('Assignments')
+    st.dataframe(adf)
+    if not adf.empty:
+        st.download_button('Download assignments CSV', data=adf.to_csv(index=False), file_name='ta_assignments.csv', mime='text/csv')
+
+    if st.button('Clear all assignments', key='ta_clear_assign'):
+        assignments = {}
+        save_json(TA_ASSIGNMENTS_FILE, assignments)
+        st.success('Cleared assignments')
+
+    if st.button('Clear all teachers (and assignments)', key='ta_clear_teachers'):
+        teachers = []
+        assignments = {}
+        save_json(TA_TEACHERS_FILE, teachers)
+        save_json(TA_ASSIGNMENTS_FILE, assignments)
+        st.success('Cleared teachers and assignments')
+			with tabs[2]:
+				st.markdown('### Compute teacher rankings')
+				if not teachers:
+					st.info('Define teachers first')
+				elif not assignments:
+					st.info('Create assignments first')
+				elif not meta:
+					st.info('No exams metadata found')
+				else:
+					years, terms, kinds = get_meta_choices(meta)
+					ycol, tcol, kcol = st.columns(3)
+					with ycol:
+						sel_year = st.selectbox('Year (compute)', options=['All'] + years, index=0, key='ta_r_year')
+					with tcol:
+						sel_term = st.selectbox('Term (compute)', options=['All'] + terms, index=0, key='ta_r_term')
+					with kcol:
+						sel_kinds = st.multiselect('Exam kind (compute - multi)', options=kinds, default=kinds, key='ta_r_kinds')
+
+					filtered = []
+					for eid, info in meta.items():
+						if sel_year != 'All' and str(info.get('year')) != str(sel_year):
+							continue
+						if sel_term != 'All' and str(info.get('term')) != str(sel_term):
+							continue
+						kind_val = str(info.get('exam_kind') or info.get('kind') or info.get('type') or '')
+						if sel_kinds and kind_val not in sel_kinds:
+							continue
+						import streamlit as st
+						import os
+						import json
+						from modules.storage import get_storage_dir
+						import pandas as pd
+
+						st.set_page_config(page_title="Teacher Analysis", layout="wide")
+
+						st.markdown("## Teacher Analysis — Assign, Rank & Export")
+						ROOT = os.path.join(get_storage_dir())
+						METADATA = os.path.join(ROOT, 'exams_metadata.json')
+						TA_TEACHERS_FILE = os.path.join(ROOT, 'ta_teachers.json')
+						TA_ASSIGNMENTS_FILE = os.path.join(ROOT, 'ta_assignments.json')
+import streamlit as st
+import os
+import json
+from modules.storage import get_storage_dir
+import pandas as pd
+
+st.set_page_config(page_title="Teacher Analysis", layout="wide")
+
+st.markdown("## Teacher Analysis — Assign, Rank & Export")
+ROOT = os.path.join(get_storage_dir())
+METADATA = os.path.join(ROOT, 'exams_metadata.json')
+TA_TEACHERS_FILE = os.path.join(ROOT, 'ta_teachers.json')
+TA_ASSIGNMENTS_FILE = os.path.join(ROOT, 'ta_assignments.json')
+
+
+def load_json(path, default):
+    try:
+        if os.path.exists(path):
+            with open(path, 'r', encoding='utf-8') as fh:
+                return json.load(fh)
+    except Exception:
+        pass
+    return default
+
+
+def save_json(path, data):
+    try:
+        with open(path, 'w', encoding='utf-8') as fh:
+            json.dump(data, fh, indent=2, ensure_ascii=False)
+        return True
+    except Exception:
+        return False
+
+
+def load_meta():
+    return load_json(METADATA, {})
+
+
+def get_meta_choices(meta):
+    years, terms, kinds = set(), set(), set()
+    for v in (meta.values() if isinstance(meta, dict) else []):
+        if v.get('year') is not None:
+            years.add(str(v.get('year')))
+        if v.get('term') is not None:
+            terms.add(str(v.get('term')))
+        kind = v.get('exam_kind') or v.get('kind') or v.get('type')
+        if kind:
+            kinds.add(str(kind))
+    return sorted(years), sorted(terms), sorted(kinds)
+
+
+def discover_subjects_and_classes(exam_ids):
+    subjects = set()
+    classes = set()
+    for eid in exam_ids:
+        try:
+            dpath = os.path.join(ROOT, eid, 'data.pkl')
+            if not os.path.exists(dpath):
+                continue
+            df = pd.read_pickle(dpath)
+            exclude = {'Name', 'Adm No', 'Class', 'Total', 'Mean', 'Rank', 'S/Rank', 'Points', 'Mean Grade'}
+            for c in df.columns:
+                if c not in exclude:
+                    subjects.add(str(c))
+            if 'Class' in df.columns:
+                classes.update(df['Class'].dropna().astype(str).unique())
+        except Exception:
+            continue
+    return sorted(subjects), sorted(classes)
+
+
+# persistent
+teachers = load_json(TA_TEACHERS_FILE, [])
+assignments = load_json(TA_ASSIGNMENTS_FILE, {})
+meta = load_meta()
+
+st.caption(f"Saved exams metadata entries: {len(meta) if isinstance(meta, dict) else 0}")
+
+# Tabs UI
+tabs = st.tabs(['Manage Teachers', 'Assign Subjects', 'Compute & Rank', 'Export'])
+
+with tabs[0]:
+    st.markdown('### Manage teachers')
+    c1, c2 = st.columns([3, 1])
+    with c1:
+        new_name = st.text_input('New teacher full name', key='ta_new_teacher')
+        if st.button('Add teacher', key='ta_add_btn'):
+            if not new_name.strip():
+                st.warning('Enter a name')
+            elif any(t.get('name') == new_name.strip() for t in teachers):
+                st.warning('Teacher exists')
+            else:
+                teachers.append({'name': new_name.strip(), 'category': 'unknown'})
+                save_json(TA_TEACHERS_FILE, teachers)
+                st.success('Added')
+                st.experimental_rerun()
+    with c2:
+        if teachers:
+            rem = st.selectbox('Remove teacher', options=[''] + [t['name'] for t in teachers], key='ta_remove')
+            if rem and st.button('Remove', key='ta_remove_btn'):
+                teachers = [t for t in teachers if t['name'] != rem]
+                assignments.pop(rem, None)
+                save_json(TA_TEACHERS_FILE, teachers)
+                save_json(TA_ASSIGNMENTS_FILE, assignments)
+                st.success('Removed')
+                st.experimental_rerun()
+
+    if teachers:
+        st.dataframe(pd.DataFrame(teachers))
+    else:
+        st.info('No teachers defined')
+
+with tabs[1]:
+    st.markdown('### Assign subjects to teachers (by class/stream)')
+    if not meta:
+        st.info('No exams metadata found. Save exams first.')
+    else:
+        years, terms, kinds = get_meta_choices(meta)
+        ycol, tcol, kcol = st.columns(3)
+        with ycol:
+            sel_year = st.selectbox('Year', options=['All'] + years, index=0, key='ta_year')
+        with tcol:
+            sel_term = st.selectbox('Term', options=['All'] + terms, index=0, key='ta_term')
+        with kcol:
+            sel_kinds = st.multiselect('Exam kind (multi-select)', options=kinds, default=kinds, key='ta_kinds')
+
+        # filter exams
+        filtered = []
+        for eid, info in meta.items():
+            if sel_year != 'All' and str(info.get('year')) != str(sel_year):
+                continue
+            if sel_term != 'All' and str(info.get('term')) != str(sel_term):
+                continue
+            kind_val = str(info.get('exam_kind') or info.get('kind') or info.get('type') or '')
+            if sel_kinds and kind_val not in sel_kinds:
+                continue
+            filtered.append(eid)
+
+        st.markdown(f'Found {len(filtered)} exams matching filters')
+        subjects, classes = discover_subjects_and_classes(filtered)
+        if not subjects:
+            st.info('No subject columns discovered in the filtered exams')
+        else:
+            left, right = st.columns([2, 3])
+            with left:
+                cls = st.selectbox('Class / Stream', options=['All Classes'] + classes, index=0, key='ta_class')
+                tnames = [t['name'] for t in teachers] if teachers else []
+                sel_teacher = st.selectbox('Teacher', options=[''] + tnames, key='ta_teacher')
+            with right:
+                sel_subjects = st.multiselect('Subjects to assign', options=subjects, key='ta_subjects')
+
+            if st.button('Assign', key='ta_assign_btn'):
+                if not sel_teacher:
+                    st.warning('Select a teacher')
+                elif not sel_subjects:
+                    st.warning('Select subjects')
+                else:
+                    assignments.setdefault(sel_teacher, [])
+                    assignments[sel_teacher].append({'class': cls if cls != 'All Classes' else '', 'subjects': sel_subjects})
+                    save_json(TA_ASSIGNMENTS_FILE, assignments)
+                    st.success('Assigned')
+                    st.experimental_rerun()
+
+        if assignments:
+            rows = []
+            for tname, alist in assignments.items():
+                for a in alist:
+                    rows.append({'teacher': tname, 'class': a.get('class', ''), 'subjects': ', '.join(a.get('subjects', []))})
+            st.dataframe(pd.DataFrame(rows))
+
+with tabs[2]:
+    st.markdown('### Compute teacher rankings')
+    if not teachers:
+        st.info('Define teachers first')
+    elif not assignments:
+        st.info('Create assignments first')
+    elif not meta:
+        st.info('No exams metadata found')
+    else:
+        years, terms, kinds = get_meta_choices(meta)
+        ycol, tcol, kcol = st.columns(3)
+        with ycol:
+            sel_year = st.selectbox('Year (compute)', options=['All'] + years, index=0, key='ta_r_year')
+        with tcol:
+            sel_term = st.selectbox('Term (compute)', options=['All'] + terms, index=0, key='ta_r_term')
+        with kcol:
+            sel_kinds = st.multiselect('Exam kind (compute - multi)', options=kinds, default=kinds, key='ta_r_kinds')
+
+        filtered = []
+        for eid, info in meta.items():
+            if sel_year != 'All' and str(info.get('year')) != str(sel_year):
+                continue
+            if sel_term != 'All' and str(info.get('term')) != str(sel_term):
+                continue
+            kind_val = str(info.get('exam_kind') or info.get('kind') or info.get('type') or '')
+            if sel_kinds and kind_val not in sel_kinds:
+                continue
+            filtered.append(eid)
+
+        if not filtered:
+            st.info('No exams selected for ranking')
+        else:
+            if st.button('Compute rankings now', key='ta_compute_btn'):
+                ranking = []
+                for t in teachers:
+                    tname = t.get('name')
+                    assigned = assignments.get(tname, [])
+                    subj_means = []
+                    for a in assigned:
+                        a_class = a.get('class')
+                        for subj in a.get('subjects', []):
+                            all_vals = []
+                            for eid in filtered:
+                                try:
+                                    dpath = os.path.join(ROOT, eid, 'data.pkl')
+                                    if not os.path.exists(dpath):
+                                        continue
+                                    df = pd.read_pickle(dpath)
+                                    dff = df
+                                    if a_class and 'Class' in df.columns:
+                                        dff = df[df['Class'].astype(str) == str(a_class)]
+                                    if subj in dff.columns:
+                                        vals = pd.to_numeric(dff[subj], errors='coerce').dropna()
+                                        if not vals.empty:
+                                            all_vals.append(vals.mean())
+                                except Exception:
+                                    continue
+                            if all_vals:
+                                subj_means.append(float(pd.Series(all_vals).mean()))
+                    score = float(pd.Series(subj_means).mean()) if subj_means else 0.0
+                    ranking.append({'teacher': tname, 'score': score, 'category': t.get('category', 'unknown')})
+
+                rdf = pd.DataFrame(sorted(ranking, key=lambda x: x['score'], reverse=True))
+                if not rdf.empty:
+                    rdf.insert(0, 'rank', range(1, len(rdf) + 1))
+                st.markdown('#### Ranking')
+                st.dataframe(rdf)
+
+                st.markdown('#### Categorize teachers')
+                for i, row in rdf.iterrows():
+                    c1, c2 = st.columns([3, 1])
+                    with c1:
+                        st.write(f"{int(row['rank'])}. {row['teacher']} — {row['score']:.2f}")
+                    with c2:
+                        cur_idx = 0
+                        try:
+                            cur_idx = ['unknown', 'upper', 'lower'].index(row.get('category', 'unknown'))
+                        except Exception:
+                            cur_idx = 0
+                        newcat = st.selectbox(f"cat_{i}", options=['unknown', 'upper', 'lower'], index=cur_idx, key=f'ta_cat_{i}')
+                        if st.button(f'Set {row["teacher"]}', key=f'ta_setcat_{i}'):
+                            for t in teachers:
+                                if t.get('name') == row['teacher']:
+                                    t['category'] = newcat
+                                    break
+                            save_json(TA_TEACHERS_FILE, teachers)
+                            st.success('Saved')
+                            st.experimental_rerun()
+
+with tabs[3]:
+    st.markdown('### Export & maintenance')
+    tdf = pd.DataFrame(teachers) if teachers else pd.DataFrame()
+    adf = []
+    for tname, alist in assignments.items():
+        for a in alist:
+            adf.append({'teacher': tname, 'class': a.get('class', ''), 'subjects': ';'.join(a.get('subjects', []))})
+    adf = pd.DataFrame(adf)
+
+    st.markdown('Teachers')
+    st.dataframe(tdf)
+    if not tdf.empty:
+        st.download_button('Download teachers CSV', data=tdf.to_csv(index=False), file_name='ta_teachers.csv', mime='text/csv')
+
+    st.markdown('Assignments')
+    st.dataframe(adf)
+    if not adf.empty:
+        st.download_button('Download assignments CSV', data=adf.to_csv(index=False), file_name='ta_assignments.csv', mime='text/csv')
+
+    if st.button('Clear all assignments', key='ta_clear_assign'):
+        assignments = {}
+        save_json(TA_ASSIGNMENTS_FILE, assignments)
+        st.success('Cleared assignments')
+
+    if st.button('Clear all teachers (and assignments)', key='ta_clear_teachers'):
+        teachers = []
+        assignments = {}
+        save_json(TA_TEACHERS_FILE, teachers)
+        save_json(TA_ASSIGNMENTS_FILE, assignments)
+        st.success('Cleared teachers and assignments')

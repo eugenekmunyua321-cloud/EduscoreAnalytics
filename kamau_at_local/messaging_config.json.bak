@@ -1,0 +1,11 @@
+{
+  "provider": "mobitech",
+  "api_url": "https://bulk.mobitechtechnologies.com/message/create",
+  "username": "",
+  "api_key": "",
+  "password": "",
+  "sender": "",
+  "http_method": "POST",
+  "content_type": "application/json",
+  "extra_params": {}
+}

@@ -1,0 +1,58 @@
+import streamlit as st
+from modules import auth
+# If a recent sign-in requested delegation to Home, perform it immediately.
+try:
+    if st.session_state.get('force_delegate_home'):
+        try:
+            # clear the flag and delegate to home.py
+            st.session_state.pop('force_delegate_home', None)
+        except Exception:
+            pass
+        try:
+            import os
+            home_path = os.path.join(os.path.dirname(__file__), 'home.py')
+            if os.path.exists(home_path):
+                with open(home_path, 'r', encoding='utf-8-sig') as f:
+                    home_code = f.read().lstrip('\ufeff')
+                ns = globals().copy()
+                ns['__file__'] = home_path
+                exec(home_code, ns)
+                st.stop()
+        except Exception:
+            # fall back to normal flow if delegation fails
+            pass
+except Exception:
+    pass
+# If the user is not signed in, render a dedicated login page and stop before any
+# other UI (including sidebar) is created. After successful sign-in the app will
+# rerun and the rest of the UI will load.
+if not auth.get_current_school_id():
+    # Use the standalone auth page file as the first page shown. It will hide the sidebar
+    # and render the full-screen sign-in UI. Only after sign-in will the app continue.
+    try:
+        import auth_page
+        auth_page.render_auth_page()
+    except Exception:
+        # fallback to the module-based renderer if the standalone file has issues
+        auth.render_login_page()
+    # Prevent any further rendering until the user signs in
+    st.stop()
+
+# If the user is signed in, show the Home page implementation (home.py) immediately
+# instead of running the rest of app.py. This makes the post-login experience match
+# `streamlit run home.py` behavior.
+if auth.get_current_school_id():
+    try:
+        import os
+        home_path = os.path.join(os.path.dirname(__file__), 'home.py')
+        if os.path.exists(home_path):
+            with open(home_path, 'r', encoding='utf-8-sig') as f:
+                home_code = f.read().lstrip('\ufeff')
+            ns = globals().copy()
+            ns['__file__'] = home_path
+            exec(home_code, ns)
+            # stop further execution of this file after delegating to home.py
+            st.stop()
+    except Exception:
+        # If anything goes wrong, continue with the original app.py behavior
+        pass

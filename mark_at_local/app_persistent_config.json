@@ -1,0 +1,43 @@
+{
+  "school_name": "",
+  "class_name": "",
+  "exam_name": "",
+  "font_family": "Poppins",
+  "font_size": 14,
+  "font_weight": "normal",
+  "font_color": "#111111",
+  "primary_color": "#0E6BA8",
+  "apply_to": [
+    "whole_app"
+  ],
+  "input_mode": "paste",
+  "combined_subjects": {},
+  "grading_enabled": false,
+  "grading_system": [
+    {
+      "grade": "A",
+      "min": 80,
+      "max": 100
+    },
+    {
+      "grade": "B",
+      "min": 70,
+      "max": 79
+    },
+    {
+      "grade": "C",
+      "min": 60,
+      "max": 69
+    },
+    {
+      "grade": "D",
+      "min": 50,
+      "max": 59
+    },
+    {
+      "grade": "E",
+      "min": 0,
+      "max": 49
+    }
+  ]
+}
