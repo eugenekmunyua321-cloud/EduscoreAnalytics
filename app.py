@@ -1192,7 +1192,6 @@ except Exception:
 nav_opts = [
     ('Authentication', 'auth'),
     ("Director's Lounge", 'directors_lounge'),
-    ('Home', 'home'),
     ('New Exam', 'new_exam'),
     ('Teacher Analysis', 'teacher_analysis'),
     # Removed additional feature pages per admin preference to keep the UI minimal
