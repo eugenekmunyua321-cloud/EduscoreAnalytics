@@ -111,19 +111,42 @@ with tab3:
     
     st.subheader("School Contact Details")
     
+    # Try to load contact info from config file
+    try:
+        config_path = Path(__file__).parent / 'config.toml'
+        if config_path.exists():
+            import toml
+            config = toml.load(config_path)
+            school_email = config.get('school', {}).get('email', 'school@example.com')
+            school_phone = config.get('school', {}).get('phone', '+254 XXX XXX XXX')
+            school_address = config.get('school', {}).get('address', 'School Address')
+            school_city = config.get('school', {}).get('city', 'City, Country')
+        else:
+            school_email = 'school@example.com'
+            school_phone = '+254 XXX XXX XXX'
+            school_address = 'School Address'
+            school_city = 'City, Country'
+    except Exception:
+        # Fallback to placeholder values
+        # TODO: Configure these values in config.toml or environment variables
+        school_email = 'school@example.com'
+        school_phone = '+254 XXX XXX XXX'
+        school_address = 'School Address'
+        school_city = 'City, Country'
+    
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown("**📧 Email:**")
-        st.text("school@example.com")
+        st.text(school_email)
         
         st.markdown("**📱 Phone:**")
-        st.text("+254 XXX XXX XXX")
+        st.text(school_phone)
     
     with col2:
         st.markdown("**📍 Address:**")
-        st.text("School Address")
-        st.text("City, Country")
+        st.text(school_address)
+        st.text(school_city)
     
     st.markdown("---")
     

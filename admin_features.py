@@ -41,6 +41,9 @@ def is_admin_user():
             d = json.loads(ADMINS_FILE.read_text(encoding='utf-8') or '{}')
             admins = d.get('admins', []) if isinstance(d, dict) else []
         else:
+            # WARNING: Default admin user for initial setup only
+            # In production, create an admins.json file with actual admin users
+            # This fallback should NOT be relied upon for production security
             admins = ['admin@local']
         
         current_user = st.session_state.get('username', '')

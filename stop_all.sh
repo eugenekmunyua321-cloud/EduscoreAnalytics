@@ -36,8 +36,24 @@ stop_process() {
         PID=$(cat "$pid_file")
         if ps -p $PID > /dev/null 2>&1; then
             print_message "$YELLOW" "Stopping $name (PID: $PID)..."
-            kill $PID 2>/dev/null || kill -9 $PID 2>/dev/null || true
-            sleep 1
+            kill $PID 2>/dev/null || true
+            
+            # Wait up to 5 seconds for graceful shutdown
+            for i in {1..5}; do
+                if ! ps -p $PID > /dev/null 2>&1; then
+                    print_message "$GREEN" "✓ $name stopped gracefully"
+                    rm -f "$pid_file"
+                    return
+                fi
+                sleep 1
+            done
+            
+            # Force kill if still running
+            if ps -p $PID > /dev/null 2>&1; then
+                print_message "$YELLOW" "Forcing shutdown of $name..."
+                kill -9 $PID 2>/dev/null || true
+                sleep 1
+            fi
             
             if ps -p $PID > /dev/null 2>&1; then
                 print_message "$RED" "✗ Failed to stop $name"
