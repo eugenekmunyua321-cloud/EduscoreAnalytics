@@ -1,0 +1,125 @@
+╔════════════════════════════════════════════════════════════════════════╗
+║                 EdusCore Analytics - Multi-Entry Point                 ║
+║                        Architecture Overview                           ║
+╚════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                            INTERNET / USERS                             │
+└──────────────┬──────────────────┬────────────────┬─────────────────────┘
+               │                  │                │
+               │                  │                │
+      ┌────────▼────────┐ ┌──────▼──────┐ ┌──────▼─────┐
+      │ app.domain.com  │ │admin.domain │ │parents.dom │
+      │  (Teachers/     │ │  (Admins)   │ │  (Parents) │
+      │   Staff)        │ │             │ │            │
+      └────────┬────────┘ └──────┬──────┘ └──────┬─────┘
+               │                  │                │
+               └──────────────────┼────────────────┘
+                                  │
+                         ┌────────▼────────┐
+                         │   NGINX         │
+                         │ Reverse Proxy   │
+                         │  Port 80/443    │
+                         │  (SSL/TLS)      │
+                         └────────┬────────┘
+                                  │
+         ┌────────────────────────┼────────────────────────┐
+         │                        │                        │
+    ┌────▼─────┐          ┌──────▼──────┐        ┌───────▼────┐
+    │Streamlit │          │  Streamlit  │        │ Streamlit  │
+    │ app.py   │          │admin_featur.│        │parents_port│
+    │Port 5000 │          │  Port 5001  │        │ Port 5002  │
+    └────┬─────┘          └──────┬──────┘        └───────┬────┘
+         │                       │                        │
+         └───────────────────────┼────────────────────────┘
+                                 │
+                        ┌────────▼────────┐
+                        │   SUPERVISOR    │
+                        │ Process Manager │
+                        │ (Auto-restart)  │
+                        └─────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════
+
+COMPONENT DETAILS:
+
+1. ENTRY POINTS (Streamlit Applications)
+   ┌────────────────────────────────────────────────────────┐
+   │ app.py (Port 5000)                                     │
+   │ - Exam entry and analysis                              │
+   │ - Teachers and staff interface                         │
+   │ - Full application features                            │
+   └────────────────────────────────────────────────────────┘
+
+   ┌────────────────────────────────────────────────────────┐
+   │ admin_features.py (Port 5001)                          │
+   │ - Administrative dashboard                             │
+   │ - User management                                      │
+   │ - System configuration                                 │
+   │ - Requires admin privileges                            │
+   └────────────────────────────────────────────────────────┘
+
+   ┌────────────────────────────────────────────────────────┐
+   │ parents_portal_standalone.py (Port 5002)               │
+   │ - Parent-facing interface                              │
+   │ - View student performance                             │
+   │ - Download report cards                                │
+   │ - Update contact information                           │
+   └────────────────────────────────────────────────────────┘
+
+2. NGINX CONFIGURATION
+   ┌────────────────────────────────────────────────────────┐
+   │ - Subdomain-based routing                              │
+   │ - SSL/TLS termination                                  │
+   │ - WebSocket support for Streamlit                      │
+   │ - Proxy headers for real IP tracking                   │
+   │ - Load balancing (if needed)                           │
+   └────────────────────────────────────────────────────────┘
+
+3. SUPERVISOR PROCESS MANAGEMENT
+   ┌────────────────────────────────────────────────────────┐
+   │ - Automatic restart on failure                         │
+   │ - Log management and rotation                          │
+   │ - Process monitoring                                   │
+   │ - Grouped control (start/stop all)                     │
+   └────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════
+
+DEPLOYMENT MODES:
+
+Development Mode (Local Testing):
+  ./start_all.sh
+  ├── Starts app.py on localhost:5000
+  ├── Starts admin_features.py on localhost:5001
+  └── Starts parents_portal_standalone.py on localhost:5002
+
+Production Mode (Server):
+  DNS → Nginx → Supervisor → Streamlit Apps
+  ├── Configure DNS A records for subdomains
+  ├── Install and configure Nginx
+  ├── Install and configure Supervisor
+  └── All apps run automatically and restart on failure
+
+═══════════════════════════════════════════════════════════════════════════
+
+FILES INCLUDED:
+
+Configuration Files:
+  • supervisor.conf      - Process management
+  • nginx_config.conf    - Reverse proxy setup
+
+Scripts:
+  • start_all.sh        - Start all apps (development)
+  • stop_all.sh         - Stop all apps (development)
+
+Documentation:
+  • DEPLOYMENT.md                - Full deployment guide
+  • MULTI_ENTRY_POINT_SETUP.md  - Quick reference
+  • ARCHITECTURE.txt             - This file
+
+Entry Points:
+  • admin_features.py            - Admin dashboard
+  • parents_portal_standalone.py - Parents portal
+
+═══════════════════════════════════════════════════════════════════════════

@@ -1,0 +1,58 @@
+# Quick Reference: Getting Your 3 URLs
+
+## 🎯 Two Ways to Get URLs
+
+┌─────────────────────────────────────────────────────────────────┐
+│                    OPTION 1: Development                        │
+│                    (Start Testing in 2 Minutes!)                │
+└─────────────────────────────────────────────────────────────────┘
+
+Step 1: Run this command
+  ./start_all.sh
+
+Step 2: Open your browser to these URLs
+  ✓ Main App:        http://localhost:5000
+  ✓ Admin:           http://localhost:5001
+  ✓ Parents Portal:  http://localhost:5002
+
+✅ DONE! No domain needed, works immediately on your computer!
+
+
+┌─────────────────────────────────────────────────────────────────┐
+│                   OPTION 2: Production                          │
+│              (Use Your Own Domain Like myschool.com)            │
+└─────────────────────────────────────────────────────────────────┘
+
+Step 1: Buy a domain (e.g., brilliantschool.com)
+  → Namecheap, GoDaddy, Google Domains (~$10/year)
+
+Step 2: Get a server
+  → DigitalOcean, Linode, AWS (~$5-10/month)
+
+Step 3: Add DNS records (THIS IS THE KEY!)
+  ┌────────────────────────────────────────────────────┐
+  │ Type │ Name    │ Value (Your Server IP)          │
+  │──────│─────────│─────────────────────────────────│
+  │  A   │ app     │ 203.0.113.45                    │
+  │  A   │ admin   │ 203.0.113.45                    │
+  │  A   │ parents │ 203.0.113.45                    │
+  └────────────────────────────────────────────────────┘
+
+Step 4: Install apps on server (see DEPLOYMENT.md)
+
+Step 5: Access from anywhere!
+  ✓ Main App:        http://app.brilliantschool.com
+  ✓ Admin:           http://admin.brilliantschool.com
+  ✓ Parents Portal:  http://parents.brilliantschool.com
+
+✅ DONE! Share these URLs with teachers, admins, and parents!
+
+
+═══════════════════════════════════════════════════════════════════
+
+💡 RECOMMENDATION: Start with Option 1 (Development) first!
+   It's the fastest way to see the system working with 3 URLs.
+
+📖 Detailed Guide: Read HOW_TO_GET_URLS.md for complete instructions
+
+═══════════════════════════════════════════════════════════════════
