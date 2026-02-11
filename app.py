@@ -1,12 +1,5 @@
-# Updated app.py
-
-# Other existing imports...
-from modules.home_page import render_home_page
-
-# Authentication checks...
-# Existing logic...
-
-# Replace the old loading of home.py with the proper call to render_home_page
-home_page_content = render_home_page()  # Update this line to properly call the rendering function
-
-# Subsequent logic to render content...
+# If the user is signed in, show the Home page immediately
+if auth.get_current_school_id():
+    from modules.home_page import render_home_page
+    render_home_page()
+    st.stop()
