@@ -1,4 +1,3 @@
-
 # --- Place all imports and ROOT definition at the very top ---
 import streamlit as st
 import json
@@ -269,7 +268,9 @@ st.markdown('This standalone admin page contains billing and subscription contro
 # the main app (which sets st.session_state['admin_password']) open this page
 # without an extra prompt.
 admf = ROOT / 'admin_meta.json'
-super_ok = False
+# Grant admin features access without requiring super-admin password
+# (per request: remove the super password gate)
+super_ok = True
 try:
     cfg = json.loads(admf.read_text(encoding='utf-8') or '{}') if admf.exists() else {}
 except Exception:
