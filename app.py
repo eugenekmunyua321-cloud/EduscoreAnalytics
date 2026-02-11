@@ -162,68 +162,67 @@ def save_exam_to_disk(exam_id, exam_metadata, exam_data, exam_raw_data, exam_con
         except Exception:
             db_ok = False
 
-        # If not in strict DB mode, write files via the storage adapter (S3 or local)
-        if not USE_DB_STRICT:
-            try:
-                # Load existing metadata (adapter will prefer remote when configured)
-                all_metadata = {}
-                if storage is not None:
-                    try:
-                        # prefer reading the per-account metadata path via the adapter
-                        m = storage.read_json(METADATA_FILE)
-                    except Exception:
-                        # fallback to legacy bare-key read (adapter may accept keys)
-                        m = storage.read_json('exams_metadata.json')
-                    if isinstance(m, dict):
-                        all_metadata = m
-                else:
-                    if os.path.exists(METADATA_FILE):
-                        with open(METADATA_FILE, 'r', encoding='utf-8') as f:
-                            all_metadata = json.load(f)
+        # Write files via the storage adapter (S3 or local) - PRIMARY storage
+        try:
+            # Load existing metadata (adapter will prefer remote when configured)
+            all_metadata = {}
+            if storage is not None:
+                try:
+                    # prefer reading the per-account metadata path via the adapter
+                    m = storage.read_json(METADATA_FILE)
+                except Exception:
+                    # fallback to legacy bare-key read (adapter may accept keys)
+                    m = storage.read_json('exams_metadata.json')
+                if isinstance(m, dict):
+                    all_metadata = m
+            else:
+                if os.path.exists(METADATA_FILE):
+                    with open(METADATA_FILE, 'r', encoding='utf-8') as f:
+                        all_metadata = json.load(f)
 
-                all_metadata[exam_id] = exam_metadata
+            all_metadata[exam_id] = exam_metadata
 
-                # Persist metadata
-                if storage is not None:
+            # Persist metadata
+            if storage is not None:
+                try:
+                    # write to the per-account metadata path
+                    storage.write_json(METADATA_FILE, all_metadata)
+                except Exception:
+                    # fallback to legacy bare-key write
                     try:
-                        # write to the per-account metadata path
-                        storage.write_json(METADATA_FILE, all_metadata)
-                    except Exception:
-                        # fallback to legacy bare-key write
-                        try:
-                            storage.write_json('exams_metadata.json', all_metadata)
-                        except Exception:
-                            pass
-                else:
-                    os.makedirs(STORAGE_DIR, exist_ok=True)
-                    with open(METADATA_FILE, 'w', encoding='utf-8') as f:
-                        json.dump(all_metadata, f, indent=2, ensure_ascii=False)
-
-                # Persist dataframes and config via adapter
-                if storage is not None:
-                    try:
-                        if isinstance(exam_data, pd.DataFrame):
-                            storage.write_pickle(f"{exam_id}/data.pkl", exam_data)
-                        if isinstance(exam_raw_data, pd.DataFrame):
-                            storage.write_pickle(f"{exam_id}/raw_data.pkl", exam_raw_data)
-                        try:
-                            storage.write_json(f"{exam_id}/config.json", exam_config)
-                        except Exception:
-                            pass
+                        storage.write_json('exams_metadata.json', all_metadata)
                     except Exception:
                         pass
-                else:
-                    exam_dir = os.path.join(STORAGE_DIR, exam_id)
-                    os.makedirs(exam_dir, exist_ok=True)
+            else:
+                os.makedirs(STORAGE_DIR, exist_ok=True)
+                with open(METADATA_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(all_metadata, f, indent=2, ensure_ascii=False)
+
+            # Persist dataframes and config via adapter
+            if storage is not None:
+                try:
                     if isinstance(exam_data, pd.DataFrame):
-                        exam_data.to_pickle(os.path.join(exam_dir, 'data.pkl'))
+                        storage.write_pickle(f"{exam_id}/data.pkl", exam_data)
                     if isinstance(exam_raw_data, pd.DataFrame):
-                        exam_raw_data.to_pickle(os.path.join(exam_dir, 'raw_data.pkl'))
-                    with open(os.path.join(exam_dir, 'config.json'), 'w', encoding='utf-8') as f:
-                        json.dump(exam_config, f, indent=2, ensure_ascii=False)
-            except Exception:
-                # best-effort only
-                pass
+                        storage.write_pickle(f"{exam_id}/raw_data.pkl", exam_raw_data)
+                    try:
+                        storage.write_json(f"{exam_id}/config.json", exam_config)
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+            else:
+                exam_dir = os.path.join(STORAGE_DIR, exam_id)
+                os.makedirs(exam_dir, exist_ok=True)
+                if isinstance(exam_data, pd.DataFrame):
+                    exam_data.to_pickle(os.path.join(exam_dir, 'data.pkl'))
+                if isinstance(exam_raw_data, pd.DataFrame):
+                    exam_raw_data.to_pickle(os.path.join(exam_dir, 'raw_data.pkl'))
+                with open(os.path.join(exam_dir, 'config.json'), 'w', encoding='utf-8') as f:
+                    json.dump(exam_config, f, indent=2, ensure_ascii=False)
+        except Exception:
+            # best-effort only
+            pass
 
         # Save into DB if available
         try:
