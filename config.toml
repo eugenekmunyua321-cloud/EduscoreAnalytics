@@ -1,0 +1,24 @@
+[server]
+runOnSave = true
+headless = false
+enableCORS = false
+fileWatcherType = "auto"
+
+[client]
+toolbarMode = "auto"
+showErrorDetails = true
+
+[runner]
+magicEnabled = true
+fastReruns = true
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"
+primaryColor = "#0E6BA8"
+backgroundColor = "#F0F2F6"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#000000"
+font = "sans serif"
