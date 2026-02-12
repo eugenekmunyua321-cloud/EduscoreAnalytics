@@ -171,7 +171,9 @@ def save_exam_to_disk(exam_id, exam_metadata, exam_data, exam_raw_data, exam_con
         try:
             all_metadata = storage.read_json(f"{sid}/exams_metadata.json") or {}
             all_metadata[exam_id] = exam_metadata
-            storage.write_json(f"{sid}/exams_metadata.json", all_metadata)
+            if not storage.write_json(f"{sid}/exams_metadata.json", all_metadata):
+                st.error("Failed to write metadata to S3")
+                return False
         except Exception as e:
             st.error(f"Failed to save metadata to S3: {e}")
             return False
@@ -179,10 +181,16 @@ def save_exam_to_disk(exam_id, exam_metadata, exam_data, exam_raw_data, exam_con
         # Save exam dataframes to S3 as pickles
         try:
             if isinstance(exam_data, pd.DataFrame):
-                storage.write_pickle(f"{sid}/{exam_id}/data.pkl", exam_data)
+                if not storage.write_pickle(f"{sid}/{exam_id}/data.pkl", exam_data):
+                    st.error("Failed to write exam data to S3")
+                    return False
             if isinstance(exam_raw_data, pd.DataFrame):
-                storage.write_pickle(f"{sid}/{exam_id}/raw_data.pkl", exam_raw_data)
-            storage.write_json(f"{sid}/{exam_id}/config.json", exam_config)
+                if not storage.write_pickle(f"{sid}/{exam_id}/raw_data.pkl", exam_raw_data):
+                    st.error("Failed to write raw data to S3")
+                    return False
+            if not storage.write_json(f"{sid}/{exam_id}/config.json", exam_config):
+                st.error("Failed to write config to S3")
+                return False
         except Exception as e:
             st.error(f"Failed to save exam files to S3: {e}")
             return False
