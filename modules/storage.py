@@ -57,6 +57,25 @@ def get_storage_dir() -> str:
     return BASE_STORAGE
 
 
+def is_s3_enabled():
+    """Check if S3 storage is actually configured and working"""
+    return _USE_S3 and _s3_mod is not None
+
+
+def verify_s3_connection():
+    """Verify S3 connection works"""
+    if not is_s3_enabled():
+        return False
+    try:
+        # Try to access the S3 bucket to verify connection
+        if hasattr(_s3_mod, '_s3') and _s3_mod._s3 is not None and hasattr(_s3_mod, '_bucket') and _s3_mod._bucket:
+            _s3_mod._s3.head_bucket(Bucket=_s3_mod._bucket)
+            return True
+        return False
+    except Exception:
+        return False
+
+
 def _path_to_key(path: str) -> str:
     """Convert a local path under BASE_STORAGE to an S3 key (relative path).
     If path is already a key (no BASE_STORAGE prefix), return it unchanged.

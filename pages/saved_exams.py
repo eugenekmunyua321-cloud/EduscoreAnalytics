@@ -594,202 +594,131 @@ try:
     from modules import db as _db
 except Exception:
     _db = None
-USE_DB_STRICT = os.environ.get('USE_DB_STRICT', 'true').lower() in ('1', 'true', 'yes')
 
 # Create storage directory if it doesn't exist
 os.makedirs(STORAGE_DIR, exist_ok=True)
 
 # Helper functions for persistence
 def save_exam_to_disk(exam_id, exam_metadata, exam_data, exam_raw_data, exam_config):
-    """Save a single exam to disk"""
+    """Save a single exam ONLY to S3 storage (no local fallback)"""
     try:
-        # Initialize DB (if available)
-        db_ok = False
-        try:
-            if _db is not None:
-                _db.init_from_env()
-                db_ok = _db.enabled()
-        except Exception:
-            db_ok = False
-
-        # If not strict DB mode, write via storage adapter (S3-aware)
-        if not USE_DB_STRICT:
-            try:
-                # update metadata (use the per-account metadata file path)
-                all_metadata = storage.read_json(METADATA_FILE) or {}
-                all_metadata[exam_id] = exam_metadata
-                ok = False
-                try:
-                    ok = storage.write_json(METADATA_FILE, all_metadata)
-                except Exception:
-                    ok = False
-
-                # If adapter write failed, attempt a direct local write as a fallback
-                if not ok:
-                    try:
-                        # ensure the directory exists
-                        os.makedirs(os.path.dirname(METADATA_FILE) or '.', exist_ok=True)
-                        import json as _json
-                        tmp = METADATA_FILE + '.tmp'
-                        with open(tmp, 'w', encoding='utf-8') as fh:
-                            _json.dump(all_metadata, fh, indent=2, ensure_ascii=False)
-                        os.replace(tmp, METADATA_FILE)
-                        ok = True
-                    except Exception:
-                        ok = False
-
-                # Verify the metadata was persisted and contains this exam id.
-                persisted = None
-                try:
-                    persisted = storage.read_json(METADATA_FILE) or {}
-                except Exception:
-                    persisted = None
-                # final local verification if storage adapter read failed
-                if not persisted:
-                    try:
-                        import json as _json
-                        if os.path.exists(METADATA_FILE):
-                            with open(METADATA_FILE, 'r', encoding='utf-8') as fh:
-                                persisted = _json.load(fh) or {}
-                    except Exception:
-                        persisted = {}
-
-                if not persisted or str(exam_id) not in persisted:
-                    # Log a diagnostic entry to help debug missing saves
-                    try:
-                        root_dbg = os.path.dirname(METADATA_FILE) or os.path.join(os.path.dirname(__file__), '..', 'saved_exams_storage')
-                        dbg_path = os.path.join(root_dbg, 'debug_save_errors.log')
-                        import json as _json, time as _time
-                        entry = {'time': int(_time.time()), 'exam_id': str(exam_id), 'ok_write': bool(ok)}
-                        try:
-                            with open(dbg_path, 'a', encoding='utf-8') as df:
-                                df.write(_json.dumps(entry, ensure_ascii=False) + '\n')
-                        except Exception:
-                            pass
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-
-            # Save dataframes and config under per-exam keys
-            try:
-                if isinstance(exam_data, pd.DataFrame):
-                    storage.write_pickle(os.path.join(str(exam_id), 'data.pkl'), exam_data)
-                if isinstance(exam_raw_data, pd.DataFrame):
-                    storage.write_pickle(os.path.join(str(exam_id), 'raw_data.pkl'), exam_raw_data)
-            except Exception:
-                pass
-            try:
-                storage.write_json(os.path.join(str(exam_id), 'config.json'), exam_config or {})
-            except Exception:
-                pass
-
-        # Save to DB if available
+        # Get school ID for namespacing
         try:
             from modules import auth as _auth
             sid = _auth.get_current_school_id() or 'global'
         except Exception:
             sid = 'global'
 
-        if db_ok:
-            try:
-                _db.save_exam_metadata(sid, exam_id, exam_metadata)
-            except Exception:
-                pass
-            try:
-                from io import BytesIO
-                if isinstance(exam_data, pd.DataFrame):
-                    b = BytesIO()
-                    exam_data.to_pickle(b)
-                    _db.save_exam_file(sid, exam_id, 'data.pkl', b.getvalue(), mimetype='application/octet-stream')
-                if isinstance(exam_raw_data, pd.DataFrame):
-                    b = BytesIO()
-                    exam_raw_data.to_pickle(b)
-                    _db.save_exam_file(sid, exam_id, 'raw_data.pkl', b.getvalue(), mimetype='application/octet-stream')
-                try:
-                    cfgb = json.dumps(exam_config, ensure_ascii=False).encode('utf-8')
-                    _db.save_exam_file(sid, exam_id, 'config.json', cfgb, mimetype='application/json')
-                except Exception:
-                    pass
-            except Exception:
-                pass
-        else:
-            # Optional: fallback to firebase upload
-            try:
-                try:
-                    from modules import firebase_storage as _fb
-                except Exception:
-                    _fb = None
-                if _fb is not None and getattr(_fb, 'is_initialized', lambda: False)():
-                    base_blob_prefix = f"saved_exams/{sid}"
-                    try:
-                        # attempt to ensure a local copy exists for firebase upload
-                        try:
-                            tmp_meta = os.path.join(STORAGE_DIR, 'exams_metadata.json')
-                            storage.download_file(METADATA_FILE, tmp_meta)
-                            _fb.upload_blob(tmp_meta, f"{base_blob_prefix}/exams_metadata.json")
-                        except Exception:
-                            pass
-                    except Exception:
-                        pass
-                    for fname in ('data.pkl', 'raw_data.pkl', 'config.json'):
-                        try:
-                            # download each exam file to a temp local path before firebase upload
-                            tmpf = os.path.join(STORAGE_DIR, exam_id, fname)
-                            storage.download_file(os.path.join(str(exam_id), fname), tmpf)
-                            if os.path.exists(tmpf):
-                                try:
-                                    _fb.upload_blob(tmpf, f"{base_blob_prefix}/{exam_id}/{fname}")
-                                except Exception:
-                                    pass
-                        except Exception:
-                            pass
-            except Exception:
-                pass
+        # CRITICAL: Force S3-only mode
+        if storage is None:
+            st.error("❌ Storage adapter not available. Cannot save exam.")
+            return False
+        
+        # Verify S3 is actually configured
+        if not hasattr(storage, 'is_s3_enabled') or not storage.is_s3_enabled():
+            st.error("❌ S3 storage not configured. Please set AWS credentials.")
+            return False
 
+        # Save metadata to S3
+        try:
+            all_metadata = storage.read_json(f"{sid}/exams_metadata.json") or {}
+            all_metadata[exam_id] = exam_metadata
+            if not storage.write_json(f"{sid}/exams_metadata.json", all_metadata):
+                st.error("Failed to write metadata to S3")
+                return False
+        except Exception as e:
+            st.error(f"Failed to save metadata to S3: {e}")
+            return False
+
+        # Save exam dataframes to S3 as pickles
+        try:
+            if isinstance(exam_data, pd.DataFrame):
+                if not storage.write_pickle(f"{sid}/{exam_id}/data.pkl", exam_data):
+                    st.error("Failed to write exam data to S3")
+                    return False
+            if isinstance(exam_raw_data, pd.DataFrame):
+                if not storage.write_pickle(f"{sid}/{exam_id}/raw_data.pkl", exam_raw_data):
+                    st.error("Failed to write raw data to S3")
+                    return False
+            if not storage.write_json(f"{sid}/{exam_id}/config.json", exam_config):
+                st.error("Failed to write config to S3")
+                return False
+        except Exception as e:
+            st.error(f"Failed to save exam files to S3: {e}")
+            return False
+
+        st.success(f"✅ Exam saved to S3: {exam_id}")
         return True
+        
     except Exception as e:
-        st.error(f"Error saving exam to disk: {e}")
+        st.error(f"Error saving exam to S3: {e}")
         return False
 
 def load_all_metadata():
-    """Load all exam metadata from disk"""
+    """Load all exam metadata from S3 storage"""
     try:
-        data = storage.read_json(METADATA_FILE)
+        # Get school ID
+        try:
+            from modules import auth as _auth
+            sid = _auth.get_current_school_id() or 'global'
+        except Exception:
+            sid = 'global'
+        
+        # Load from S3
+        if storage is None or not hasattr(storage, 'is_s3_enabled') or not storage.is_s3_enabled():
+            st.warning("⚠️ S3 storage not configured")
+            return {}
+        
+        data = storage.read_json(f"{sid}/exams_metadata.json")
         return data or {}
     except Exception as e:
         st.error(f"Error loading metadata: {e}")
         return {}
 
 def load_exam_from_disk(exam_id):
-    """Load a single exam from disk"""
+    """Load a single exam from S3 storage"""
     try:
-        # Try reading via storage adapter
-        exam_data = storage.read_pickle(os.path.join(str(exam_id), 'data.pkl'))
-        exam_raw_data = storage.read_pickle(os.path.join(str(exam_id), 'raw_data.pkl'))
-        exam_config = storage.read_json(os.path.join(str(exam_id), 'config.json')) or {}
+        # Get school ID
+        try:
+            from modules import auth as _auth
+            sid = _auth.get_current_school_id() or 'global'
+        except Exception:
+            sid = 'global'
+        
+        # Try reading via storage adapter from S3
+        exam_data = storage.read_pickle(f"{sid}/{exam_id}/data.pkl")
+        exam_raw_data = storage.read_pickle(f"{sid}/{exam_id}/raw_data.pkl")
+        exam_config = storage.read_json(f"{sid}/{exam_id}/config.json") or {}
         return exam_data, exam_raw_data, exam_config
     except Exception as e:
         st.error(f"Error loading exam {exam_id}: {e}")
         return None, None, None
 
 def delete_exam_from_disk(exam_id):
-    """Delete an exam from disk"""
+    """Delete an exam from S3 storage"""
     try:
+        # Get school ID
+        try:
+            from modules import auth as _auth
+            sid = _auth.get_current_school_id() or 'global'
+        except Exception:
+            sid = 'global'
+        
         # Remove from metadata via storage adapter
         try:
-            all_metadata = storage.read_json(METADATA_FILE) or {}
+            all_metadata = storage.read_json(f"{sid}/exams_metadata.json") or {}
             all_metadata.pop(exam_id, None)
-            storage.write_json(METADATA_FILE, all_metadata)
+            storage.write_json(f"{sid}/exams_metadata.json", all_metadata)
         except Exception:
             pass
 
         # Remove all objects under the exam prefix
         try:
-            objs = storage.list_objects(prefix=str(exam_id))
+            objs = storage.list_objects(prefix=f"{sid}/{exam_id}")
             for o in objs:
                 try:
-                    storage.delete(o)
+                    # Reconstruct full path with prefix
+                    storage.delete(f"{sid}/{exam_id}/{o}")
                 except Exception:
                     pass
         except Exception:
