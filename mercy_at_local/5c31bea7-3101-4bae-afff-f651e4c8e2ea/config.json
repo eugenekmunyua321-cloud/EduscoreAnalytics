@@ -1,0 +1,62 @@
+{
+  "out_ENG PP1": 50,
+  "out_ENG PP2": 35,
+  "out_COMP": 15,
+  "out_KISW PP1": 50,
+  "out_KISW PP2": 35,
+  "out_INSHA": 15,
+  "out_MATH": 100,
+  "out_INT/SCI": 100,
+  "out_C/A": 100,
+  "out_AGRI/NUT": 100,
+  "out_SS/T": 100,
+  "out_CRE": 100,
+  "out_PRE/TECH": 100,
+  "combined_subjects": {
+    "ENG": [
+      "ENG PP1",
+      "ENG PP2",
+      "COMP"
+    ],
+    "KISWA": [
+      "KISW PP1",
+      "KISW PP2",
+      "INSHA"
+    ]
+  },
+  "grading_enabled": false,
+  "grading_system": [
+    {
+      "grade": "A",
+      "min": 80,
+      "max": 100
+    },
+    {
+      "grade": "B",
+      "min": 70,
+      "max": 79
+    },
+    {
+      "grade": "C",
+      "min": 60,
+      "max": 69
+    },
+    {
+      "grade": "D",
+      "min": 50,
+      "max": 59
+    },
+    {
+      "grade": "E",
+      "min": 0,
+      "max": 49
+    }
+  ],
+  "strict_grading_enabled": false,
+  "strict_grading_system": [],
+  "strict_grading_subjects": [],
+  "excluded_subjects": [],
+  "exclude_lowest_grade": false,
+  "excluded_students_from_means": [],
+  "ranking_basis": "Totals"
+}

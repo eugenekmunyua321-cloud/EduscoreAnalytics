@@ -1,0 +1,57 @@
+{
+  "school_name": "",
+  "class_name": "",
+  "exam_name": "",
+  "font_family": "Poppins",
+  "font_size": 14,
+  "font_weight": "normal",
+  "font_color": "#111111",
+  "primary_color": "#0E6BA8",
+  "apply_to": [
+    "whole_app"
+  ],
+  "input_mode": "paste",
+  "combined_subjects": {},
+  "grading_enabled": false,
+  "grading_system": [
+    {
+      "grade": "A",
+      "min": 80,
+      "max": 100
+    },
+    {
+      "grade": "B",
+      "min": 70,
+      "max": 79
+    },
+    {
+      "grade": "C",
+      "min": 60,
+      "max": 69
+    },
+    {
+      "grade": "D",
+      "min": 50,
+      "max": 59
+    },
+    {
+      "grade": "E",
+      "min": 0,
+      "max": 49
+    }
+  ],
+  "ranking_basis": "Totals",
+  "out_ENG PP1": 100,
+  "out_ENG PP2": 100,
+  "out_COMP": 100,
+  "out_KISW PP1": 100,
+  "out_KISW PP2": 100,
+  "out_INSHA": 100,
+  "out_MATH": 100,
+  "out_INT/SCI": 100,
+  "out_C/A": 100,
+  "out_AGRI/NUT": 100,
+  "out_SS/T": 100,
+  "out_CRE": 100,
+  "out_PRE/TECH": 100
+}
