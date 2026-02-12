@@ -147,285 +147,112 @@ try:
     from modules import db as _db
 except Exception:
     _db = None
-# When true (env var), the app will prefer DB writes and skip local disk writes
-USE_DB_STRICT = os.environ.get('USE_DB_STRICT', 'true').lower() in ('1', 'true', 'yes')
 
 def save_exam_to_disk(exam_id, exam_metadata, exam_data, exam_raw_data, exam_config):
-    """Save a single exam to disk"""
+    """Save a single exam ONLY to S3 storage (no local fallback)"""
     try:
-        # Initialize DB helper if available
-        db_ok = False
-        try:
-            if _db is not None:
-                _db.init_from_env()
-                db_ok = _db.enabled()
-        except Exception:
-            db_ok = False
-
-        # If not in strict DB mode, write files via the storage adapter (S3 or local)
-        if not USE_DB_STRICT:
-            try:
-                # Load existing metadata (adapter will prefer remote when configured)
-                all_metadata = {}
-                if storage is not None:
-                    try:
-                        # prefer reading the per-account metadata path via the adapter
-                        m = storage.read_json(METADATA_FILE)
-                    except Exception:
-                        # fallback to legacy bare-key read (adapter may accept keys)
-                        m = storage.read_json('exams_metadata.json')
-                    if isinstance(m, dict):
-                        all_metadata = m
-                else:
-                    if os.path.exists(METADATA_FILE):
-                        with open(METADATA_FILE, 'r', encoding='utf-8') as f:
-                            all_metadata = json.load(f)
-
-                all_metadata[exam_id] = exam_metadata
-
-                # Persist metadata
-                if storage is not None:
-                    try:
-                        # write to the per-account metadata path
-                        storage.write_json(METADATA_FILE, all_metadata)
-                    except Exception:
-                        # fallback to legacy bare-key write
-                        try:
-                            storage.write_json('exams_metadata.json', all_metadata)
-                        except Exception:
-                            pass
-                else:
-                    os.makedirs(STORAGE_DIR, exist_ok=True)
-                    with open(METADATA_FILE, 'w', encoding='utf-8') as f:
-                        json.dump(all_metadata, f, indent=2, ensure_ascii=False)
-
-                # Persist dataframes and config via adapter
-                if storage is not None:
-                    try:
-                        if isinstance(exam_data, pd.DataFrame):
-                            storage.write_pickle(f"{exam_id}/data.pkl", exam_data)
-                        if isinstance(exam_raw_data, pd.DataFrame):
-                            storage.write_pickle(f"{exam_id}/raw_data.pkl", exam_raw_data)
-                        try:
-                            storage.write_json(f"{exam_id}/config.json", exam_config)
-                        except Exception:
-                            pass
-                    except Exception:
-                        pass
-                else:
-                    exam_dir = os.path.join(STORAGE_DIR, exam_id)
-                    os.makedirs(exam_dir, exist_ok=True)
-                    if isinstance(exam_data, pd.DataFrame):
-                        exam_data.to_pickle(os.path.join(exam_dir, 'data.pkl'))
-                    if isinstance(exam_raw_data, pd.DataFrame):
-                        exam_raw_data.to_pickle(os.path.join(exam_dir, 'raw_data.pkl'))
-                    with open(os.path.join(exam_dir, 'config.json'), 'w', encoding='utf-8') as f:
-                        json.dump(exam_config, f, indent=2, ensure_ascii=False)
-            except Exception:
-                # best-effort only
-                pass
-
-        # Save into DB if available
+        # Get school ID for namespacing
         try:
             sid = auth.get_current_school_id() or 'global'
         except Exception:
             sid = 'global'
 
-        if db_ok:
-            try:
-                # metadata
-                try:
-                    _db.save_exam_metadata(sid, exam_id, exam_metadata)
-                except Exception:
-                    pass
-                # pickles and config
-                try:
-                    from io import BytesIO
-                    if isinstance(exam_data, pd.DataFrame):
-                        b = BytesIO()
-                        exam_data.to_pickle(b)
-                        _db.save_exam_file(sid, exam_id, 'data.pkl', b.getvalue(), mimetype='application/octet-stream')
-                    if isinstance(exam_raw_data, pd.DataFrame):
-                        b = BytesIO()
-                        exam_raw_data.to_pickle(b)
-                        _db.save_exam_file(sid, exam_id, 'raw_data.pkl', b.getvalue(), mimetype='application/octet-stream')
-                    try:
-                        cfgb = json.dumps(exam_config, ensure_ascii=False).encode('utf-8')
-                        _db.save_exam_file(sid, exam_id, 'config.json', cfgb, mimetype='application/json')
-                    except Exception:
-                        pass
-                except Exception:
-                    pass
-            except Exception:
-                pass
-        else:
-            # fallback: if Firebase helper exists, upload there as best-effort
-            try:
-                if fb is not None and getattr(fb, 'is_initialized', lambda: False)():
-                    try:
-                        base_blob_prefix = f"saved_exams/{sid}"
-                        try:
-                            # Ensure we have a local copy for the firebase helper
-                            if storage is not None:
-                                try:
-                                    storage.download_file(METADATA_FILE, METADATA_FILE)
-                                except Exception:
-                                    # fallback to bare-key remote name
-                                    try:
-                                        storage.download_file('exams_metadata.json', METADATA_FILE)
-                                    except Exception:
-                                        pass
-                            fb.upload_blob(METADATA_FILE, f"{base_blob_prefix}/exams_metadata.json")
-                        except Exception:
-                            pass
-                        for fname in ('data.pkl', 'raw_data.pkl', 'config.json'):
-                            lp = os.path.join(STORAGE_DIR, exam_id, fname)
-                            try:
-                                # If adapter is in use, download remote file into the local cache path
-                                if storage is not None:
-                                    try:
-                                        storage.download_file(f"{exam_id}/{fname}", lp)
-                                    except Exception:
-                                        pass
-                                if os.path.exists(lp):
-                                    try:
-                                        fb.upload_blob(lp, f"{base_blob_prefix}/{exam_id}/{fname}")
-                                    except Exception:
-                                        pass
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-            except Exception:
-                pass
+        # CRITICAL: Force S3-only mode
+        if storage is None:
+            st.error("❌ Storage adapter not available. Cannot save exam.")
+            return False
+        
+        # Verify S3 is actually configured
+        if not hasattr(storage, 'is_s3_enabled') or not storage.is_s3_enabled():
+            st.error("❌ S3 storage not configured. Please set AWS credentials.")
+            return False
 
+        # Save metadata to S3
+        try:
+            all_metadata = storage.read_json(f"{sid}/exams_metadata.json") or {}
+            all_metadata[exam_id] = exam_metadata
+            storage.write_json(f"{sid}/exams_metadata.json", all_metadata)
+        except Exception as e:
+            st.error(f"Failed to save metadata to S3: {e}")
+            return False
+
+        # Save exam dataframes to S3 as pickles
+        try:
+            if isinstance(exam_data, pd.DataFrame):
+                storage.write_pickle(f"{sid}/{exam_id}/data.pkl", exam_data)
+            if isinstance(exam_raw_data, pd.DataFrame):
+                storage.write_pickle(f"{sid}/{exam_id}/raw_data.pkl", exam_raw_data)
+            storage.write_json(f"{sid}/{exam_id}/config.json", exam_config)
+        except Exception as e:
+            st.error(f"Failed to save exam files to S3: {e}")
+            return False
+
+        st.success(f"✅ Exam saved to S3: {exam_id}")
         return True
+        
     except Exception as e:
-        st.error(f"Error saving exam to disk: {e}")
+        st.error(f"Error saving exam to S3: {e}")
         return False
 
 def load_all_exams_from_disk():
-    """Load all saved exams from disk into session state"""
+    """Load all saved exams from S3 storage ONLY"""
     try:
-        # Try DB-first, then fall back to local storage
-        db_ok = False
+        # Get school ID
         try:
-            if _db is not None:
-                _db.init_from_env()
-                db_ok = _db.enabled()
+            sid = auth.get_current_school_id() or 'global'
         except Exception:
-            db_ok = False
+            sid = 'global'
 
+        # Initialize session storage
         st.session_state.saved_exams = []
-        all_metadata = {}
-        if db_ok:
-            try:
-                sid = auth.get_current_school_id() or None
-                rows = _db.list_exams(sid)
-                for r in rows:
-                    mid = r.get('metadata') or {}
-                    all_metadata[r.get('exam_id')] = mid
-            except Exception:
+        st.session_state.saved_exam_data = {}
+        st.session_state.saved_exam_raw_data = {}
+        st.session_state.saved_exam_configs = {}
+
+        # CRITICAL: Force S3-only mode
+        if storage is None:
+            st.warning("⚠️ Storage adapter not available")
+            return
+        
+        if not hasattr(storage, 'is_s3_enabled') or not storage.is_s3_enabled():
+            st.warning("⚠️ S3 storage not configured")
+            return
+
+        # Load metadata from S3
+        try:
+            all_metadata = storage.read_json(f"{sid}/exams_metadata.json")
+            if not isinstance(all_metadata, dict):
                 all_metadata = {}
-        else:
-            # Use storage adapter to read metadata (will prefer remote if configured)
-            try:
-                if storage is not None:
-                    try:
-                        m = storage.read_json(METADATA_FILE)
-                    except Exception:
-                        m = storage.read_json('exams_metadata.json')
-                    if isinstance(m, dict):
-                        all_metadata = m
-                else:
-                    if not os.path.exists(METADATA_FILE):
-                        return
-                    with open(METADATA_FILE, 'r', encoding='utf-8') as f:
-                        all_metadata = json.load(f)
-            except Exception:
-                all_metadata = {}
+        except Exception as e:
+            st.warning(f"No exams found in S3: {e}")
+            all_metadata = {}
 
         # Build saved_exams list from metadata
         for exam_id, metadata in all_metadata.items():
             st.session_state.saved_exams.append(metadata)
 
-        # Setup caches
-        st.session_state.saved_exam_data = {}
-        st.session_state.saved_exam_raw_data = {}
-        st.session_state.saved_exam_configs = {}
-
-        # Load data for all exams (try DB files first, else storage adapter)
+        # Load data for all exams from S3
         for exam_id in list(all_metadata.keys()):
             try:
-                loaded = False
-                # DB-backed files
-                if db_ok:
-                    try:
-                        files = _db.get_exam_files(exam_id)
-                        for fname, data, mimetype in files:
-                            if fname == 'data.pkl':
-                                try:
-                                    from io import BytesIO
-                                    st.session_state.saved_exam_data[exam_id] = pd.read_pickle(BytesIO(data))
-                                    loaded = True
-                                except Exception:
-                                    pass
-                            elif fname == 'raw_data.pkl':
-                                try:
-                                    from io import BytesIO
-                                    st.session_state.saved_exam_raw_data[exam_id] = pd.read_pickle(BytesIO(data))
-                                    loaded = True
-                                except Exception:
-                                    pass
-                            elif fname == 'config.json':
-                                try:
-                                    st.session_state.saved_exam_configs[exam_id] = json.loads(data.decode('utf-8'))
-                                    loaded = True
-                                except Exception:
-                                    pass
-                    except Exception:
-                        loaded = False
-
-                if not loaded:
-                    # Use storage adapter to load pickles/config (will prefer remote)
-                    try:
-                        if storage is not None:
-                            d = storage.read_pickle(f"{exam_id}/data.pkl")
-                            if d is not None:
-                                st.session_state.saved_exam_data[exam_id] = d
-                                loaded = True
-                            rd = storage.read_pickle(f"{exam_id}/raw_data.pkl")
-                            if rd is not None:
-                                st.session_state.saved_exam_raw_data[exam_id] = rd
-                                loaded = True
-                            cfg = storage.read_json(f"{exam_id}/config.json")
-                            if cfg is not None:
-                                st.session_state.saved_exam_configs[exam_id] = cfg
-                                loaded = True
-                        else:
-                            exam_dir = os.path.join(STORAGE_DIR, exam_id)
-                            if not os.path.exists(exam_dir):
-                                continue
-                            data_path = os.path.join(exam_dir, 'data.pkl')
-                            raw_data_path = os.path.join(exam_dir, 'raw_data.pkl')
-                            config_path = os.path.join(exam_dir, 'config.json')
-                            if os.path.exists(data_path):
-                                st.session_state.saved_exam_data[exam_id] = pd.read_pickle(data_path)
-                                loaded = True
-                            if os.path.exists(raw_data_path):
-                                st.session_state.saved_exam_raw_data[exam_id] = pd.read_pickle(raw_data_path)
-                                loaded = True
-                            if os.path.exists(config_path):
-                                with open(config_path, 'r', encoding='utf-8') as f:
-                                    st.session_state.saved_exam_configs[exam_id] = json.load(f)
-                                    loaded = True
-                    except Exception:
-                        # best-effort; continue to next exam
-                        pass
-            except Exception:
+                # Load pickles from S3
+                data_df = storage.read_pickle(f"{sid}/{exam_id}/data.pkl")
+                if data_df is not None:
+                    st.session_state.saved_exam_data[exam_id] = data_df
+                
+                raw_df = storage.read_pickle(f"{sid}/{exam_id}/raw_data.pkl")
+                if raw_df is not None:
+                    st.session_state.saved_exam_raw_data[exam_id] = raw_df
+                
+                config = storage.read_json(f"{sid}/{exam_id}/config.json")
+                if config is not None:
+                    st.session_state.saved_exam_configs[exam_id] = config
+                    
+            except Exception as e:
+                st.warning(f"Failed to load exam {exam_id} from S3: {e}")
                 continue
+                
     except Exception as e:
-        st.error(f"Error loading exams from disk: {e}")
+        st.error(f"Error loading exams from S3: {e}")
 
 def df_to_pdf_bytes(df, school_name, class_name, title='', orientation='portrait', scale=90, font_size=9, fit_all_rows=False):
     """Convert DataFrame to PDF bytes with better wrapping, alignment, and scaling."""
@@ -1617,6 +1444,13 @@ if st.session_state.cfg.get("term") != st.session_state.get("term_widget"):
 uid_key = st.session_state.get('user_uid') or 'guest'
 school_widget_key = f"school_name_{uid_key}"
 school_input = st.sidebar.text_input("School Name", value=st.session_state.school_name_widget, key=school_widget_key)
+
+# S3 Status Indicator
+if storage and hasattr(storage, 'is_s3_enabled'):
+    if storage.is_s3_enabled():
+        st.sidebar.success("☁️ S3 Storage Active")
+    else:
+        st.sidebar.error("⚠️ S3 Not Configured")
 
 # Only show Class/Stream and Exam Name when NOT viewing a saved exam
 viewing_saved_exam = st.session_state.get('selected_saved_exam_id') is not None
