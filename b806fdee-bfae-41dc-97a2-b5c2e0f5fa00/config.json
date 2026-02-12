@@ -1,0 +1,196 @@
+{
+  "out_NAMES": 100,
+  "out_ENG PP1": 50,
+  "out_ENG PP2": 50,
+  "out_KISW PP1": 50,
+  "out_KISW PP2": 50,
+  "out_MATH": 50,
+  "out_INT/SCI": 50,
+  "out_C/A": 50,
+  "out_AGRI/NUT": 50,
+  "out_SS/T": 50,
+  "out_CRE": 50,
+  "out_PRE/TECH": 50,
+  "out_ENG": 50,
+  "out_KISWA": 50,
+  "out_KISW": 100,
+  "out_LITERACY": 50,
+  "out_KUSOMA": 52,
+  "out_ENVIR": 50,
+  "out_ENG ": 50,
+  "out_POS": 100,
+  "out_AGR/NUT": 100,
+  "out_TOTALS": 100,
+  "out_KISW ": 100,
+  "out_COMP": 50,
+  "out_INSHA": 50,
+  "out_SCI/TECH": 50,
+  "out_C.A.S": 50,
+  "out_SS/RE": 50,
+  "out_JACINTA WANJIRU": 100,
+  "out_CREATIVE": 50,
+  "out_ENGL": 50,
+  "out_MATHS": 50,
+  "out_ENVIRON": 50,
+  "out_LANGUAGE": 52,
+  "out_READING": 52,
+  "out_LUGHA": 52,
+  "out_INT": 30,
+  "out_INTE": 50,
+  "out_INTEG": 52,
+  "out_AGRI": 50,
+  "out_SCI": 50,
+  "out_SST": 50,
+  "out_C/ARTS": 50,
+  "out_HADASSAH NYAKIO ": 100,
+  "out_10": 100,
+  "out_22": 100,
+  "out_26": 100,
+  "out_3": 100,
+  "out_28": 100,
+  "out_44": 100,
+  "out_2": 100,
+  "out_34": 100,
+  "out_26.1": 100,
+  "out_46": 100,
+  "out_6G": 100,
+  "out_VICTOR MUIRURI": 100,
+  "out_8": 100,
+  "out_50": 100,
+  "out_30": 100,
+  "out_30.1": 100,
+  "out_23": 100,
+  "out_33": 100,
+  "out_7": 100,
+  "out_14": 100,
+  "out_21": 100,
+  "out_6B": 100,
+  "combined_subjects": {
+    "TOT": [
+      "ENG PP1",
+      "ENG PP2",
+      "COMP"
+    ],
+    "JUM": [
+      "KISW PP1",
+      "KISW PP2",
+      "INSHA"
+    ]
+  },
+  "grading_enabled": false,
+  "grading_system": [
+    {
+      "grade": "A",
+      "max": 80,
+      "min": 100,
+      "points": 12
+    },
+    {
+      "grade": "A-",
+      "max": 75,
+      "min": 79,
+      "points": 11
+    },
+    {
+      "grade": "B+",
+      "max": 70,
+      "min": 74,
+      "points": 10
+    },
+    {
+      "grade": "B",
+      "max": 65,
+      "min": 69,
+      "points": 9
+    },
+    {
+      "grade": "B-",
+      "max": 60,
+      "min": 62,
+      "points": 8
+    },
+    {
+      "grade": "C+",
+      "max": 55,
+      "min": 59,
+      "points": 7
+    },
+    {
+      "grade": "C",
+      "max": 50,
+      "min": 54,
+      "points": 6
+    },
+    {
+      "grade": "C-",
+      "max": 45,
+      "min": 49,
+      "points": 5
+    },
+    {
+      "grade": "D+",
+      "max": 40,
+      "min": 44,
+      "points": 4
+    },
+    {
+      "grade": "D",
+      "max": 35,
+      "min": 39,
+      "points": 3
+    },
+    {
+      "grade": "D-",
+      "max": 30,
+      "min": 34,
+      "points": 2
+    },
+    {
+      "grade": "E",
+      "max": 0,
+      "min": 29,
+      "points": 1
+    }
+  ],
+  "strict_grading_enabled": true,
+  "strict_grading_system": [
+    {
+      "grade": "A",
+      "max": 90,
+      "min": 100,
+      "points": 12
+    },
+    {
+      "grade": "B",
+      "max": 80,
+      "min": 89,
+      "points": 10
+    },
+    {
+      "grade": "C",
+      "max": 70,
+      "min": 79,
+      "points": 8
+    },
+    {
+      "grade": "D",
+      "max": 60,
+      "min": 69,
+      "points": 6
+    },
+    {
+      "grade": "E",
+      "max": 0,
+      "min": 59,
+      "points": 4
+    }
+  ],
+  "strict_grading_subjects": [
+    "ENG",
+    "KISW"
+  ],
+  "excluded_subjects": [],
+  "exclude_lowest_grade": false,
+  "excluded_students_from_means": [],
+  "ranking_basis": "Totals"
+}

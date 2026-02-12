@@ -1,0 +1,11 @@
+{
+  "provider": "africastalking",
+  "api_url": "https://api.africastalking.com/version1/messaging",
+  "username": "Hfgjjkihyydee",
+  "api_key": "atsk_28c20630b65f8ef066b7467403e86ec90ea3d6b86dd6e20f83040a838ba8520a755d52da",
+  "password": "atsk_28c20630b65f8ef066b7467403e86ec90ea3d6b86dd6e20f83040a838ba8520a755d52da",
+  "sender": "",
+  "http_method": "POST",
+  "content_type": "application/x-www-form-urlencoded",
+  "extra_params": {}
+}
